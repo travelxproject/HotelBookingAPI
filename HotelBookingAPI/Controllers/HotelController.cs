@@ -1,38 +1,50 @@
-﻿using HotelBookingAPI.APIs;
-using Microsoft.AspNetCore.Mvc;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using HotelBookingAPI.HotelModel;
+﻿using Microsoft.AspNetCore.Mvc;
+using HotelBookingAPI.Models;
+using HotelBookingAPI.Services;
+using HotelBookingAPI.APIs.HotelAPIProject.Services;
 
 namespace HotelBookingAPI.Controllers
 {
-
-    namespace HotelAPIProject.Controllers
+    [ApiController]
+    [Route("api/[controller]")]
+    public class HotelController : ControllerBase
     {
-        [ApiController]
-        [Route("api/[controller]")]
-        public class HotelController : ControllerBase
+        private readonly AmadeusService _amadeusService;
+
+        public HotelController(AmadeusService amadeusService)
         {
-            private readonly IHotelService _hotelService;
+            _amadeusService = amadeusService;
+        }
 
-            public HotelController(IHotelService hotelService)
+        [HttpGet("search")]
+        public async Task<IActionResult> SearchHotels(
+            [FromQuery] string cityCode,
+            [FromQuery] string checkInDate,
+            [FromQuery] string checkOutDate,
+            [FromQuery] decimal? minPrice,
+            [FromQuery] decimal? maxPrice,
+            [FromQuery] int? rating,
+            [FromQuery] string services)
+        {
+            var request = new HotelSearchRequest
             {
-                _hotelService = hotelService;
+                CityCode = cityCode,
+                CheckInDate = checkInDate,
+                CheckOutDate = checkOutDate,
+                MinPrice = minPrice,
+                MaxPrice = maxPrice,
+                Rating = rating,
+                Services = services
+            };
+
+            var response = await _amadeusService.SearchHotelsAsync(request);
+
+            if (response == null)
+            {
+                return BadRequest("Failed to fetch hotel data from Amadeus API.");
             }
 
-            [HttpGet("search")]
-            public async Task<IActionResult> GetHotels([FromQuery] string activity, [FromQuery] string location)
-            {
-                if (string.IsNullOrEmpty(activity) || string.IsNullOrEmpty(location))
-                {
-                    return BadRequest("Activity and location parameters are required.");
-                }
-
-                var hotels = await _hotelService.GetHotelsByActivityAsync(activity, location);
-                return Ok(hotels);
-            }
+            return Ok(response);
         }
     }
-
-
 }
