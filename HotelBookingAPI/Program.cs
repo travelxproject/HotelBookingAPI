@@ -18,19 +18,16 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddHttpClient<AmadeusService>();
 
-builder.WebHost.UseUrls("http://localhost:6000");
+builder.WebHost.UseUrls("http://localhost:6011");
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/swagger/v1/swagger.json", "Hotel Booking API v1");
-        options.RoutePrefix = "swagger"; 
-    });
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Hotel Booking API v1");
+    options.RoutePrefix = "swagger"; 
+});
 
 app.UseRouting();
 app.UseAuthorization();

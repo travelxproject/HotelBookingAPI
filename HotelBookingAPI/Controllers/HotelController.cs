@@ -35,7 +35,7 @@ namespace HotelBookingAPI.Controllers
             [FromQuery] decimal? minPrice,
             [FromQuery] decimal? maxPrice,
             [FromQuery] int? rating,
-            [FromQuery] string services)
+            [FromQuery] string? services)
         {
             var request = new HotelSearchRequest
             {
