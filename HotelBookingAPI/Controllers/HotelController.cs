@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using HotelBookingAPI.Models;
 using HotelBookingAPI.Services;
-using HotelBookingAPI.APIs.HotelAPIProject.Services;
+using HotelBookingAPI.Services;
+using Swashbuckle.AspNetCore.Annotations;
+
 
 namespace HotelBookingAPI.Controllers
 {
@@ -24,7 +26,13 @@ namespace HotelBookingAPI.Controllers
         /// <param name="rating">Rating (Optional)</param>
         /// <param name="services">Included Services (Optional)</param>
         /// <returns>Searched Result</returns>
+        [Produces("application/json")]
         [HttpGet("search")]
+        [SwaggerOperation(
+            Summary = "Search hotels by location",
+            Description = "Find hotels based on conditions")]
+        [SwaggerResponse(200, "Success", typeof(HotelSearchResponse))]
+        [SwaggerResponse(400, "Invalid Request")]
         [ProducesResponseType(typeof(HotelSearchResponse), 200)]
         [ProducesResponseType(400)]
         public async Task<IActionResult> SearchHotels(

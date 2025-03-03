@@ -14,6 +14,31 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1",
         Description = "API for searching and booking hotels using Amadeus API.",
     });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter 'Bearer <token> in the field below."
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] { }
+        }
+    });
+    options.EnableAnnotations();
+    options.SupportNonNullableReferenceTypes();
 });
 
 builder.Services.AddHttpClient<AmadeusService>();
