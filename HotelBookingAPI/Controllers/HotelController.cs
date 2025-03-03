@@ -15,10 +15,21 @@ namespace HotelBookingAPI.Controllers
         {
             _amadeusService = amadeusService;
         }
-
+        /// <param name="latitude">Latitude</param>
+        /// <param name="longitude">Longitude</param>
+        /// <param name="checkInDate">Check In Date (yyyy-MM-dd)</param>
+        /// <param name="checkOutDate">Check Out Date (yyyy-MM-dd)</param>
+        /// <param name="minPrice">Lowest Pirce (Optional)</param>
+        /// <param name="maxPrice">Highest Price (Optional)</param>
+        /// <param name="rating">Rating (Optional)</param>
+        /// <param name="services">Included Services (Optional)</param>
+        /// <returns>Searched Result</returns>
         [HttpGet("search")]
+        [ProducesResponseType(typeof(HotelSearchResponse), 200)]
+        [ProducesResponseType(400)]
         public async Task<IActionResult> SearchHotels(
-            [FromQuery] string cityCode,
+            [FromQuery] double latitude,
+            [FromQuery] double longitude,
             [FromQuery] string checkInDate,
             [FromQuery] string checkOutDate,
             [FromQuery] decimal? minPrice,
@@ -28,7 +39,8 @@ namespace HotelBookingAPI.Controllers
         {
             var request = new HotelSearchRequest
             {
-                CityCode = cityCode,
+                Latitude = latitude,
+                Longitude = longitude,
                 CheckInDate = checkInDate,
                 CheckOutDate = checkOutDate,
                 MinPrice = minPrice,

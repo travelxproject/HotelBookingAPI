@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using HotelBookingAPI.Models;
 using System.Text.Json.Serialization;
+using Afonsoft.Amadeus;
 
 namespace HotelBookingAPI.Services
 {
@@ -28,7 +29,10 @@ namespace HotelBookingAPI.Services
                 return null;
             }
 
-            var url = $"https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-city?cityCode={request.CityCode}";
+            string url = $"https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-geocode?latitude={request.Latitude}" +
+                            $"&longtitude={request.Longitude}&radius=5&radiusUnit=KM";
+
+            //var url = $"https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-city?cityCode={request.CityCode}";
 
             //var url = $"https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-city?cityCode={request.CityCode}" +
             //           $"&checkInDate={request.CheckInDate}&checkOutDate={request.CheckOutDate}";
@@ -62,7 +66,53 @@ namespace HotelBookingAPI.Services
             }
 
             var content = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<HotelSearchResponse>(content);
+            var hotelOffers = ParseAmadeusResponse(content);
+
+            foreach (var hotel in hotelOffers.Data)
+            {
+                hotel.IsAvailable = await CheckHotelAvailability(hotel.HotelID, request.CheckInDate, request.CheckOutDate, accessToken);
+            }
+            return hotelOffers;
+        }
+
+        private async Task<bool> CheckHotelAvailability(string hotelID, string checkInDate, string checkOutDate, string accessToken)
+        {
+            string url = $"https://test.api.amadeus.com/v3/shopping/hotel-offers/by-hotel?hotelID={hotelID}" +
+                          $"&checkInDate={checkInDate}&checkOutDate={checkOutDate}";
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            var response = await _httpClient.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine("Failed to fetch hotel data from Amadeus API - CheckHotelAvailability.");
+                Console.WriteLine($"Status Code: {response.StatusCode}");
+                Console.WriteLine($"Response: {await response.Content.ReadAsStringAsync()}");
+                return false;
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(content);
+            return jsonDoc.RootElement.TryGetProperty("offers", out JsonElement offers) && offers.GetArrayLength() > 0;
+        }
+
+        private HotelSearchResponse ParseAmadeusResponse(string jsonResponse)
+        {
+            using var jsonDoc = JsonDocument.Parse(jsonResponse);
+            var root = jsonDoc.RootElement;
+
+            var hotelList = new List<HotelOffer>();
+
+            foreach (var hotel in root.GetProperty("data").EnumerateArray())
+            {
+                hotelList.Add(new HotelOffer
+                {
+                    HotelID = hotel.GetProperty("hotel").GetProperty("hotelID").GetString(),
+                    HotelName = hotel.GetProperty("hotel").GetProperty("name").GetString(),
+                    Location = hotel.GetProperty("hotel").GetProperty("address").GetProperty("cityName").GetString(),
+                    Price = hotel.GetProperty("hotel")[0].GetProperty("price").GetProperty("total").GetDecimal(),
+                    Rating = hotel.GetProperty("hotel")[0].TryGetProperty("rating", out JsonElement rating) ? rating.GetInt32() : 0
+                });
+            }
+            return new HotelSearchResponse { Data = hotelList };
         }
 
         private async Task<string> GetAccessTokenAsync()
@@ -87,23 +137,23 @@ namespace HotelBookingAPI.Services
             var content = await response.Content.ReadAsStringAsync();
             Console.WriteLine("Access token response: " + content);
             try
-    {
-        var tokenResponse = JsonSerializer.Deserialize<AccessTokenResponse>(content);
-        Console.WriteLine("Deserialized token response: " + JsonSerializer.Serialize(tokenResponse)); // 打印反序列化结果
-        return tokenResponse?.AccessToken;
-    }
-    catch (JsonException ex)
-    {
-        Console.WriteLine("Failed to deserialize access token response.");
-        Console.WriteLine($"Error: {ex.Message}");
-        return null;
-    }
+            {
+                var tokenResponse = JsonSerializer.Deserialize<AccessTokenResponse>(content);
+                Console.WriteLine("Deserialized token response: " + JsonSerializer.Serialize(tokenResponse)); 
+                return tokenResponse?.AccessToken;
+            }
+            catch (JsonException ex)
+            {
+                Console.WriteLine("Failed to deserialize access token response.");
+                Console.WriteLine($"Error: {ex.Message}");
+                return null;
+            }
         }
-    }
 
-    public class AccessTokenResponse
-    {
-        [JsonPropertyName("access_token")]
-        public string? AccessToken { get; set; }
+        public class AccessTokenResponse
+        {
+            [JsonPropertyName("access_token")]
+            public string? AccessToken { get; set; }
+        }
     }
 }

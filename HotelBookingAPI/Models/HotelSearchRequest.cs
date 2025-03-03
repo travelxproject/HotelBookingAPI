@@ -2,7 +2,8 @@
 {
     public class HotelSearchRequest
     {
-        public string CityCode { get; set; }
+        public double Latitude { get; set; }
+        public double Longitude { get; set; }
         public string CheckInDate { get; set; }
         public string CheckOutDate { get; set; }
         public decimal? MinPrice { get; set; }
