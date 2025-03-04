@@ -1,13 +1,33 @@
 ﻿using HotelBookingAPI.Services;
 using Microsoft.OpenApi.Models;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false, // Set to `true` if you have a known issuer
+            ValidateAudience = false, // Set to `true` if you have a known audience
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("YourSecretKeyHere")) // Replace with your secret key
+        };
+    });
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddControllers();
 
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(options =>
 {
+
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "Hotel Booking API",
@@ -53,6 +73,7 @@ app.UseSwaggerUI(options =>
     options.SwaggerEndpoint("/swagger/v1/swagger.json", "Hotel Booking API v1");
     options.RoutePrefix = "swagger"; 
 });
+app.UseAuthentication(); 
 
 app.UseRouting();
 app.UseAuthorization();

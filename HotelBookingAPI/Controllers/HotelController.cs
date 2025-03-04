@@ -3,6 +3,7 @@ using HotelBookingAPI.Models;
 using HotelBookingAPI.Services;
 using HotelBookingAPI.Services;
 using Swashbuckle.AspNetCore.Annotations;
+using Microsoft.AspNetCore.Authorization;
 
 
 namespace HotelBookingAPI.Controllers
