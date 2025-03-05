@@ -16,6 +16,6 @@ namespace HotelBookingAPI.Models
         public string Location { get; set; }
         public List<string> Services { get; set; }
 
-        public bool IsAvailable { get; set; }
+        public string IsAvailable { get; set; }
     }
 }

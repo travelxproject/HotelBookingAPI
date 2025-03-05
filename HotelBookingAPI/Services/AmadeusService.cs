@@ -22,6 +22,7 @@ namespace HotelBookingAPI.Services
             _apiSecret = configuration["ApiKeys:AmadeusClientSecret"];
         }
 
+        // General entry point to enter longitude and latitude to search hotels 
         public async Task<HotelSearchResponse> SearchHotelsAsync(HotelSearchRequest request)
         {
             var accessToken = await GetAccessTokenAsync();
@@ -34,7 +35,7 @@ namespace HotelBookingAPI.Services
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
             string hotelSearchUrl = $"https://test.api.amadeus.com/v1/reference-data/locations/hotels/by-geocode" +
-                                    $"?latitude={request.Latitude}&longitude={request.Longitude}&radius=5&radiusUnit=KM";
+                                    $"?latitude={request.Latitude}&longitude={request.Longitude}&radius=3&radiusUnit=KM";
 
             var hotelResponse = await _httpClient.GetAsync(hotelSearchUrl);
             if (!hotelResponse.IsSuccessStatusCode)
@@ -58,6 +59,7 @@ namespace HotelBookingAPI.Services
             return new HotelSearchResponse { Data = hotelOffers ?? new List<HotelOffer>() };
         }
 
+        // Fetching the detailed hotel offer info, return as a list. Try maximum 3 times to parse hotel info with 1s sending request to API for rate limit. 
         private async Task<List<HotelOffer>?> FetchHotelOffersAsync(List<string> hotelIds, HotelSearchRequest request)
         {
             var allOffers = new List<HotelOffer>();
@@ -67,6 +69,8 @@ namespace HotelBookingAPI.Services
 
             foreach (var chunk in hotelIdChunks)
             {
+                // TODO: use https://developers.amadeus.com/self-service/category/hotels/api-doc/hotel-search/api-reference/v/2.0 previous version to fetch
+                // hotel info. Mandatory: cityCode, latitude, longitude & hotelIds
                 string offerUrl = $"https://test.api.amadeus.com/v3/shopping/hotel-offers?hotelIds={string.Join(",", chunk)}" +
                                   $"&checkInDate={request.CheckInDate}&checkOutDate={request.CheckOutDate}";
 
@@ -96,7 +100,7 @@ namespace HotelBookingAPI.Services
                     else
                     {
                         var offerError = await offerResponse.Content.ReadAsStringAsync();
-                        Console.WriteLine($"❌ Failed to fetch hotel offers. Status: {offerResponse.StatusCode}, Response: {offerError}");
+                        Console.WriteLine($"Failed to fetch hotel offers. Status: {offerResponse.StatusCode}, Response: {offerError}");
                         break; 
                     }
                 }
@@ -105,6 +109,7 @@ namespace HotelBookingAPI.Services
             return allOffers;
         }
 
+        // Extract hotel ID from a bunch of hotel data
         private List<string> ExtractHotelIds(string jsonResponse)
         {
             var hotelIds = new List<string>();
@@ -138,16 +143,16 @@ namespace HotelBookingAPI.Services
             {
                 if (!hotelEntry.TryGetProperty("hotel", out var hotel) || hotel.ValueKind != JsonValueKind.Object)
                     continue;
+                Console.WriteLine("Price: "+ParseHelper.ParseDecimalFromJson(hotelEntry, "offers[0].price.total"));
 
                 var hotelOffer = new HotelOffer
                 {
                     HotelID = hotel.TryGetProperty("hotelId", out var hotelId) ? hotelId.GetString() : "Unknown",
                     HotelName = hotel.TryGetProperty("name", out var hotelName) ? hotelName.GetString() : "Unknown",
-                    Location = hotel.TryGetProperty("address", out var address) && address.TryGetProperty("cityName", out var cityName)
-                        ? cityName.GetString()
-                        : "Unknown",
+                    Location = hotel.TryGetProperty("cityCode", out var cityCode) ? cityCode.GetString(): "Unknown",
                     Price = ParseHelper.ParseDecimalFromJson(hotelEntry, "offers[0].price.total"), 
-                    Rating = ParseHelper.ParseIntFromJson(hotel, "rating")
+                    Rating = ParseHelper.ParseIntFromJson(hotel, "rating"),
+                    IsAvailable = hotelEntry.TryGetProperty("available", out var available) ? available.GetBoolean().ToString():"Unknown"
                 };
 
                 hotelList.Add(hotelOffer);
