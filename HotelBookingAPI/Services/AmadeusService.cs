@@ -46,62 +46,62 @@ namespace HotelBookingAPI.Services
             }
 
             var hotelContent = await hotelResponse.Content.ReadAsStringAsync();
-            var hotelIds = ExtractHotelIds(hotelContent);
 
-            if (!hotelIds.Any())
+            var hotelIdIata = ExtractHotelIds(hotelContent);
+
+            if (!hotelIdIata.Any())
             {
                 Console.WriteLine("No hotels found in the given location.");
                 return null;
             }
 
-            var hotelOffers = await FetchHotelOffersAsync(hotelIds, request);
+            var hotelOffers = await FetchHotelOffersAsync(hotelIdIata, request);
 
             return new HotelSearchResponse { Data = hotelOffers ?? new List<HotelOffer>() };
         }
 
         // Fetching the detailed hotel offer info, return as a list. Try maximum 3 times to parse hotel info with 1s sending request to API for rate limit. 
-        private async Task<List<HotelOffer>?> FetchHotelOffersAsync(List<string> hotelIds, HotelSearchRequest request)
+        private async Task<List<HotelOffer>?> FetchHotelOffersAsync(Dictionary<string, string> hotelIdIata, HotelSearchRequest request)
         {
             var allOffers = new List<HotelOffer>();
-            int maxIdsPerRequest = 10; 
+            int maxIdsPerRequest = 10;
 
-            var hotelIdChunks = hotelIds.Chunk(maxIdsPerRequest);
-
-            foreach (var chunk in hotelIdChunks)
+            foreach (var cityGroup in hotelIdIata.GroupBy(h => h.Value))
             {
-                // TODO: use https://developers.amadeus.com/self-service/category/hotels/api-doc/hotel-search/api-reference/v/2.0 previous version to fetch
-                // hotel info. Mandatory: cityCode, latitude, longitude & hotelIds
-                string offerUrl = $"https://test.api.amadeus.com/v3/shopping/hotel-offers?hotelIds={string.Join(",", chunk)}" +
-                                  $"&checkInDate={request.CheckInDate}&checkOutDate={request.CheckOutDate}";
+                string cityCode = cityGroup.Key;
+                var hotelIds = cityGroup.Select(h => h.Key).ToList(); 
 
-                int maxRetries = 3;
-                int delay = 1000;
-
-                for (int i = 0; i < maxRetries; i++)
+                for (int i = 0; i < hotelIds.Count; i += maxIdsPerRequest)
                 {
-                    var offerResponse = await _httpClient.GetAsync(offerUrl);
-                    Console.WriteLine("offerResponse = " + offerResponse);
-                    if (offerResponse.IsSuccessStatusCode)
+                    var chunk = hotelIds.Skip(i).Take(maxIdsPerRequest).ToList(); 
+
+                    string offerUrl = $"https://test.api.amadeus.com/v2/shopping/hotel-offers?hotelIds={string.Join(",", chunk)}&cityCode={cityCode}" +
+                                      $"&checkInDate={request.CheckInDate}&checkOutDate={request.CheckOutDate}&roomQuantity={request.NumRomms}&adults={request.NumPeople}";
+
+                    int maxRetries = 3;
+                    int delay = 1000;
+
+                    for (int retry = 0; retry < maxRetries; retry++)
                     {
-                        var offerContent = await offerResponse.Content.ReadAsStringAsync();
-                        var offers = ParseAmadeusResponse(offerContent);
-                        if (offers != null)
+                        var offerResponse = await _httpClient.GetAsync(offerUrl);
+                        if (offerResponse.IsSuccessStatusCode)
                         {
-                            allOffers.AddRange(offers);
+                            var offerContent = await offerResponse.Content.ReadAsStringAsync();
+                            var offers = ParseAmadeusResponse(offerContent);
+                            if (offers != null) allOffers.AddRange(offers);
+                            break;
                         }
-                        break; 
-                    }
-                    else if (offerResponse.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-                    {
-                        Console.WriteLine($"Rate limit exceeded. Retrying in {delay / 1000} seconds...");
-                        await Task.Delay(delay);
-                        delay *= 2; // Exponential backoff (1s -> 2s -> 4s -> 8s -> 16s)
-                    }
-                    else
-                    {
-                        var offerError = await offerResponse.Content.ReadAsStringAsync();
-                        Console.WriteLine($"Failed to fetch hotel offers. Status: {offerResponse.StatusCode}, Response: {offerError}");
-                        break; 
+                        else if (offerResponse.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                        {
+                            Console.WriteLine($"Rate limit exceeded. Retrying in {delay / 1000} seconds...");
+                            await Task.Delay(delay);
+                            delay *= 2;
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Failed to fetch hotel offers. Status: {offerResponse.StatusCode}");
+                            break;
+                        }
                     }
                 }
             }
@@ -110,23 +110,32 @@ namespace HotelBookingAPI.Services
         }
 
         // Extract hotel ID from a bunch of hotel data
-        private List<string> ExtractHotelIds(string jsonResponse)
+        private Dictionary<string, string> ExtractHotelIds(string jsonResponse)
         {
-            var hotelIds = new List<string>();
+            var hotelIdIata = new Dictionary<string, string>();
             using var jsonDoc = JsonDocument.Parse(jsonResponse);
 
-            if (jsonDoc.RootElement.TryGetProperty("data", out var dataElement))
+            if (jsonDoc.RootElement.TryGetProperty("data", out var dataElement) && dataElement.ValueKind == JsonValueKind.Array)
             {
                 foreach (var hotel in dataElement.EnumerateArray())
                 {
                     if (hotel.TryGetProperty("hotelId", out var hotelId) && hotelId.ValueKind == JsonValueKind.String)
                     {
-                        hotelIds.Add(hotelId.GetString());
+                        string hotelIdStr = hotelId.GetString();
+                        string cityCodeStr = "Unknown"; 
+
+                        if (hotel.TryGetProperty("iataCode", out var iataCode) && iataCode.ValueKind == JsonValueKind.String)
+                        {
+                            cityCodeStr = iataCode.GetString();
+                        }
+
+                        hotelIdIata[hotelIdStr] = cityCodeStr;
                     }
                 }
             }
-            return hotelIds;
+            return hotelIdIata;
         }
+
 
         private List<HotelOffer>? ParseAmadeusResponse(string jsonResponse)
         {
@@ -151,8 +160,12 @@ namespace HotelBookingAPI.Services
                     HotelName = hotel.TryGetProperty("name", out var hotelName) ? hotelName.GetString() : "Unknown",
                     Location = hotel.TryGetProperty("cityCode", out var cityCode) ? cityCode.GetString(): "Unknown",
                     Price = ParseHelper.ParseDecimalFromJson(hotelEntry, "offers[0].price.total"), 
+                    Currency = hotel.TryGetProperty("currency", out var currency) ? currency.GetString() : "Unknown",
                     Rating = ParseHelper.ParseIntFromJson(hotel, "rating"),
-                    IsAvailable = hotelEntry.TryGetProperty("available", out var available) ? available.GetBoolean().ToString():"Unknown"
+                    IsAvailable = hotelEntry.TryGetProperty("available", out var available) ? available.GetBoolean().ToString():"Unknown",
+                    Services = hotelEntry.TryGetProperty("amenities", out var amenities) && amenities.ValueKind == JsonValueKind.Array
+                            ? amenities.EnumerateArray().Select(a => a.GetString()).Where(s => !string.IsNullOrEmpty(s)).ToList()
+                            : new List<string>()
                 };
 
                 hotelList.Add(hotelOffer);
