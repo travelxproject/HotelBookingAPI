@@ -13,7 +13,7 @@ namespace HotelBookingAPI.Models
         public string HotelName { get; set; }
         public decimal Price { get; set; }
         public string Currency { get; set; }
-        public int Rating { get; set; }
+        public string Rating { get; set; }
         public string Location { get; set; }
         public List<string> Services { get; set; }
 

@@ -1,6 +1,7 @@
 ﻿using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HotelBookingAPI.APIs;
 using HotelBookingAPI.Models;
 using HotelBookingAPI.Utilities;
 
@@ -20,6 +21,9 @@ namespace HotelBookingAPI.Services
             _httpClient = httpClient;
             _apiKey = configuration["ApiKeys:Amadeus"];
             _apiSecret = configuration["ApiKeys:AmadeusClientSecret"];
+
+            // Initialize the Google API key before calling the method
+            GooglePlacesService.Initialize(configuration["ApiKeys:GooglePlacesApiKey"]);
         }
 
         // General entry point to enter longitude and latitude to search hotels 
@@ -55,59 +59,20 @@ namespace HotelBookingAPI.Services
                 return null;
             }
 
-            var hotelOffers = await FetchHotelOffersAsync(hotelIdIata, request);
+            var hotelIdName = ExtractHotelNames(hotelContent);
+
+            if (!hotelIdName.Any())
+            {
+                Console.WriteLine("No hotels found in the given location.");
+            }
+
+            var hotelRatingService = await GooglePlacesService.GetHotelDetailsAsync(hotelIdName);
+           
+            var hotelOffers = await FetchHotelOffers.FetchHotelOffersAsync(_httpClient, hotelIdIata, request, hotelRatingService);
 
             return new HotelSearchResponse { Data = hotelOffers ?? new List<HotelOffer>() };
         }
 
-        // Fetching the detailed hotel offer info, return as a list. Try maximum 3 times to parse hotel info with 1s sending request to API for rate limit. 
-        private async Task<List<HotelOffer>?> FetchHotelOffersAsync(Dictionary<string, string> hotelIdIata, HotelSearchRequest request)
-        {
-            var allOffers = new List<HotelOffer>();
-            int maxIdsPerRequest = 10;
-
-            foreach (var cityGroup in hotelIdIata.GroupBy(h => h.Value))
-            {
-                string cityCode = cityGroup.Key;
-                var hotelIds = cityGroup.Select(h => h.Key).ToList(); 
-
-                for (int i = 0; i < hotelIds.Count; i += maxIdsPerRequest)
-                {
-                    var chunk = hotelIds.Skip(i).Take(maxIdsPerRequest).ToList(); 
-
-                    string offerUrl = $"https://test.api.amadeus.com/v2/shopping/hotel-offers?hotelIds={string.Join(",", chunk)}&cityCode={cityCode}" +
-                                      $"&checkInDate={request.CheckInDate}&checkOutDate={request.CheckOutDate}&roomQuantity={request.NumRomms}&adults={request.NumPeople}";
-
-                    int maxRetries = 3;
-                    int delay = 1000;
-
-                    for (int retry = 0; retry < maxRetries; retry++)
-                    {
-                        var offerResponse = await _httpClient.GetAsync(offerUrl);
-                        if (offerResponse.IsSuccessStatusCode)
-                        {
-                            var offerContent = await offerResponse.Content.ReadAsStringAsync();
-                            var offers = ParseAmadeusResponse(offerContent);
-                            if (offers != null) allOffers.AddRange(offers);
-                            break;
-                        }
-                        else if (offerResponse.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-                        {
-                            Console.WriteLine($"Rate limit exceeded. Retrying in {delay / 1000} seconds...");
-                            await Task.Delay(delay);
-                            delay *= 2;
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Failed to fetch hotel offers. Status: {offerResponse.StatusCode}");
-                            break;
-                        }
-                    }
-                }
-            }
-
-            return allOffers;
-        }
 
         // Extract hotel ID from a bunch of hotel data
         private Dictionary<string, string> ExtractHotelIds(string jsonResponse)
@@ -136,42 +101,30 @@ namespace HotelBookingAPI.Services
             return hotelIdIata;
         }
 
-
-        private List<HotelOffer>? ParseAmadeusResponse(string jsonResponse)
+        private Dictionary<string, string> ExtractHotelNames(string jsonResponse)
         {
-            var hotelList = new List<HotelOffer>();
-
+            var hotelIdName = new Dictionary<string, string>();
             using var jsonDoc = JsonDocument.Parse(jsonResponse);
-            if (!jsonDoc.RootElement.TryGetProperty("data", out var dataElement) || dataElement.ValueKind != JsonValueKind.Array)
-            {
-                Console.WriteLine("Key 'data' not found in Amadeus API response.");
-                return null;
-            }
 
-            foreach (var hotelEntry in dataElement.EnumerateArray())
+            if (jsonDoc.RootElement.TryGetProperty("data", out var dataElement) && dataElement.ValueKind == JsonValueKind.Array)
             {
-                if (!hotelEntry.TryGetProperty("hotel", out var hotel) || hotel.ValueKind != JsonValueKind.Object)
-                    continue;
-                Console.WriteLine("Price: "+ParseHelper.ParseDecimalFromJson(hotelEntry, "offers[0].price.total"));
-
-                var hotelOffer = new HotelOffer
+                foreach (var hotel in dataElement.EnumerateArray())
                 {
-                    HotelID = hotel.TryGetProperty("hotelId", out var hotelId) ? hotelId.GetString() : "Unknown",
-                    HotelName = hotel.TryGetProperty("name", out var hotelName) ? hotelName.GetString() : "Unknown",
-                    Location = hotel.TryGetProperty("cityCode", out var cityCode) ? cityCode.GetString(): "Unknown",
-                    Price = ParseHelper.ParseDecimalFromJson(hotelEntry, "offers[0].price.total"), 
-                    Currency = hotel.TryGetProperty("currency", out var currency) ? currency.GetString() : "Unknown",
-                    Rating = ParseHelper.ParseIntFromJson(hotel, "rating"),
-                    IsAvailable = hotelEntry.TryGetProperty("available", out var available) ? available.GetBoolean().ToString():"Unknown",
-                    Services = hotelEntry.TryGetProperty("amenities", out var amenities) && amenities.ValueKind == JsonValueKind.Array
-                            ? amenities.EnumerateArray().Select(a => a.GetString()).Where(s => !string.IsNullOrEmpty(s)).ToList()
-                            : new List<string>()
-                };
+                    if (hotel.TryGetProperty("hotelId", out var hotelId) && hotelId.ValueKind == JsonValueKind.String)
+                    {
+                        string hotelIdStr = hotelId.GetString();
+                        string name = "Unknown";
 
-                hotelList.Add(hotelOffer);
+                        if (hotel.TryGetProperty("name", out var nameCode) && nameCode.ValueKind == JsonValueKind.String)
+                        {
+                            name = nameCode.GetString();
+                        }
+
+                        hotelIdName[hotelIdStr] = name;
+                    }
+                }
             }
-
-            return hotelList;
+            return hotelIdName;
         }
 
         private async Task<string> GetAccessTokenAsync()

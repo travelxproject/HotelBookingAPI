@@ -10,7 +10,7 @@
         public int NumPeople { get; set; }
         public decimal? MinPrice { get; set; }
         public decimal? MaxPrice { get; set; }
-        public int? Rating { get; set; }
+        public string? Rating { get; set; }
         public string? Services { get; set; }
     }
 }
