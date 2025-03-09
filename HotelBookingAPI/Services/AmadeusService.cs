@@ -66,8 +66,12 @@ namespace HotelBookingAPI.Services
                 Console.WriteLine("No hotels found in the given location.");
             }
 
+            foreach (var kvp in hotelIdName)
+            {
+                Console.WriteLine($"Hotel ID: {kvp.Key}, Hotel Name: {kvp.Value}");
+            }
+            // Parsing google place api here for rating and services
             var hotelRatingService = await GooglePlacesService.GetHotelDetailsAsync(hotelIdName);
-           
             var hotelOffers = await FetchHotelOffers.FetchHotelOffersAsync(_httpClient, hotelIdIata, request, hotelRatingService);
 
             return new HotelSearchResponse { Data = hotelOffers ?? new List<HotelOffer>() };

@@ -49,8 +49,26 @@ namespace HotelBookingAPI.Services
                         }
                         else
                         {
-                            Console.WriteLine($"Failed to fetch hotel offers. Status: {offerResponse.StatusCode}");
-                            break;
+                            Console.WriteLine($"Warning: Failed to fetch hotel offers for batch. Status: {offerResponse.StatusCode}");
+                            foreach (var hotelId in chunk)
+                            {
+                                string singleHotelUrl = $"https://test.api.amadeus.com/v3/shopping/hotel-offers?hotelIds={hotelId}" +
+                                                        $"&checkInDate={request.CheckInDate}&checkOutDate={request.CheckOutDate}" +
+                                                        $"&roomQuantity={request.NumRomms}&adults={request.NumPeople}";
+
+                                var singleResponse = await _httpClient.GetAsync(singleHotelUrl);
+                                if (singleResponse.IsSuccessStatusCode)
+                                {
+                                    var singleContent = await singleResponse.Content.ReadAsStringAsync();
+                                    var singleOffers = ParseAmadeusResponse(singleContent, hotelRating);
+                                    if (singleOffers != null) allOffers.AddRange(singleOffers);
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Failed to fetch offer for hotel ID {hotelId}. Status: {singleResponse.StatusCode}");
+                                }
+                            }
+                            break; 
                         }
                     }
                 }
@@ -67,7 +85,7 @@ namespace HotelBookingAPI.Services
             if (!jsonDoc.RootElement.TryGetProperty("data", out var dataElement) || dataElement.ValueKind != JsonValueKind.Array)
             {
                 Console.WriteLine("Key 'data' not found in Amadeus API response.");
-                return null;
+                return new List<HotelOffer>();
             }
 
             foreach (var hotelEntry in dataElement.EnumerateArray())
@@ -95,7 +113,7 @@ namespace HotelBookingAPI.Services
                     HotelName = hotel.TryGetProperty("name", out var hotelName) ? hotelName.GetString() : "Unknown",
                     Location = hotel.TryGetProperty("cityCode", out var cityCode) ? cityCode.GetString() : "Unknown",
                     Price = ParseHelper.ParseDecimalFromJson(hotelEntry, "offers[0].price.total"),
-                    Currency = hotel.TryGetProperty("offers", out var offers) && offers[0].TryGetProperty("price", out var price) &&
+                    Currency = hotelEntry.TryGetProperty("offers", out var offers) && offers[0].TryGetProperty("price", out var price) &&
                                price.TryGetProperty("currency", out var currency) ? currency.GetString(): "Unknown",
                     Rating = rating.ToString(),
                     IsAvailable = hotelEntry.TryGetProperty("available", out var available) ? available.GetBoolean().ToString() : "Unknown",
