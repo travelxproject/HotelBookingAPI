@@ -1,4 +1,4 @@
-﻿using System;
+﻿using HotelBookingAPI.Database;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -7,70 +7,59 @@ namespace HotelBookingAPI.APIs
 {
     public class GooglePlacesService
     {
-        private static HttpClient _httpClient = new HttpClient();
-        private static string _apiKey;
+        private readonly HttpClient _httpClient;
+        private readonly string _apiKey;
+        private readonly HotelRepositoryDB _hotelRepositoryDB;
 
-        public static void Initialize(string apiKey)
+        public GooglePlacesService(HttpClient httpClient, IConfiguration configuration, HotelRepositoryDB hotelRepositoryDB)
         {
-            _apiKey = apiKey;
+            _httpClient = httpClient;
+            _apiKey = configuration["GooglePlaces:ApiKey"];
+            _hotelRepositoryDB = hotelRepositoryDB;
         }
 
-        public static async Task<Dictionary<string, (double, List<string>)>> GetHotelDetailsAsync(Dictionary<string, string> hotelIdName)
+        public async Task ProcessHotelsAsync()
         {
-            var hotelDetails = new Dictionary<string, (double, List<string>)>();
-            int maxRetries = 3;
-            int delay = 1000;
+            var hotels = await _hotelRepositoryDB.GetHotelsWithoutRatingsAsync(); // List of Hotel names
+            if (!hotels.Any()) return;
 
-            foreach (var (hotelId, hotelName) in hotelIdName)
+            // Step 1: Fetch all Place IDs in parallel
+            var placeIdResults = await Task.WhenAll(hotels.Select(async h => (h, await GetPlaceIdAsync(h.HotelName))));
+            var hotelPlaceMap = placeIdResults.Where(x => x.Item2 != null)
+                                              .ToDictionary(x => x.h.HotelId, x => x.Item2!);
+
+            // Step 2: Fetch all hotel details in parallel
+            var detailsResults = await Task.WhenAll(hotelPlaceMap.Select(async h => (h.Key, await FetchHotelDetailsFromGoogle(h.Value))));
+
+            // Step 3: Update DB with fetched details
+            var hotelDetails = detailsResults.Where(x => x.Item2 != null)
+                                             .ToDictionary(x => x.Key, x => x.Item2!.Value);
+            if (hotelDetails.Any())
             {
-                string? placeId = await GetPlaceIdAsync(hotelName);
-                if (placeId == null)
-                {
-                    Console.WriteLine($"Could not find Place ID for {hotelName}");
-                    continue;
-                }
-
-                string detailsUrl = $"https://maps.googleapis.com/maps/api/place/details/json" +
-                                    $"?place_id={placeId}&fields=name,rating,types&key={_apiKey}";
-
-                for (int retry = 0; retry < maxRetries; retry++)
-                {
-                    var response = await _httpClient.GetAsync(detailsUrl);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var content = await response.Content.ReadAsStringAsync();
-                        using var jsonDoc = JsonDocument.Parse(content);
-
-                        if (jsonDoc.RootElement.TryGetProperty("result", out var result))
-                        {
-                            double rating = result.TryGetProperty("rating", out var ratingElement) ? ratingElement.GetDouble() : 0.0;
-
-                            List<string> amenities = new List<string>();
-                            if (result.TryGetProperty("types", out var typesElement) && typesElement.ValueKind == JsonValueKind.Array)
-                            {
-                                amenities = typesElement.EnumerateArray().Select(x => x.GetString()).Where(x => x != null).ToList()!;
-                            }
-
-                            hotelDetails[hotelId] = (rating, amenities);
-                        }
-                        break;
-                    }
-                    else if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
-                    {
-                        Console.WriteLine($"Rate limit exceeded. Retrying in {delay / 1000} seconds...");
-                        await Task.Delay(delay);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Failed to fetch hotel details. Status: {response.StatusCode}");
-                        break;
-                    }
-                }
+                await _hotelRepositoryDB.SaveHotelDetailsAsync(hotelDetails);
             }
-            return hotelDetails;
         }
 
-        private static async Task<string?> GetPlaceIdAsync(string hotelName)
+        private async Task<(double rating, List<string> amenities)?> FetchHotelDetailsFromGoogle(string placeId)
+        {
+            string url = $"https://maps.googleapis.com/maps/api/place/details/json?place_id={placeId}&fields=rating,types&key={_apiKey}";
+            var response = await _httpClient.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return null;
+
+            var content = await response.Content.ReadAsStringAsync();
+            using var jsonDoc = JsonDocument.Parse(content);
+
+            if (!jsonDoc.RootElement.TryGetProperty("result", out var result)) return null;
+
+            double rating = result.TryGetProperty("rating", out var r) ? r.GetDouble() : 0.0;
+            var amenities = result.TryGetProperty("types", out var types) && types.ValueKind == JsonValueKind.Array
+                ? types.EnumerateArray().Select(x => x.GetString()).Where(x => x != null).ToList()!
+                : new List<string>();
+
+            return (rating, amenities);
+        }
+
+        private async Task<string?> GetPlaceIdAsync(string hotelName)
         {
             string searchUrl = $"https://maps.googleapis.com/maps/api/place/findplacefromtext/json" +
                                $"?input={Uri.EscapeDataString(hotelName)}&inputtype=textquery&fields=place_id&key={_apiKey}";
@@ -88,5 +77,4 @@ namespace HotelBookingAPI.APIs
             return null;
         }
     }
-
 }

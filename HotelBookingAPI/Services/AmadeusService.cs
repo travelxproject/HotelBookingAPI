@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HotelBookingAPI.APIs;
+using HotelBookingAPI.Database;
 using HotelBookingAPI.Models;
 using HotelBookingAPI.Utilities;
 
@@ -16,14 +17,14 @@ namespace HotelBookingAPI.Services
         private string? _accessToken;
         private DateTime _tokenExpiration;
 
-        public AmadeusService(HttpClient httpClient, IConfiguration configuration)
+        private readonly HotelRepositoryDB _hotelRepositoryDB;
+
+        public AmadeusService(HttpClient httpClient, IConfiguration configuration, HotelRepositoryDB hotelRepositoryDB)
         {
             _httpClient = httpClient;
             _apiKey = configuration["ApiKeys:Amadeus"];
             _apiSecret = configuration["ApiKeys:AmadeusClientSecret"];
-
-            // Initialize the Google API key before calling the method
-            GooglePlacesService.Initialize(configuration["ApiKeys:GooglePlacesApiKey"]);
+            _hotelRepositoryDB = hotelRepositoryDB;
         }
 
         // General entry point to enter longitude and latitude to search hotels 
@@ -66,13 +67,18 @@ namespace HotelBookingAPI.Services
                 Console.WriteLine("No hotels found in the given location.");
             }
 
-            foreach (var kvp in hotelIdName)
-            {
-                Console.WriteLine($"Hotel ID: {kvp.Key}, Hotel Name: {kvp.Value}");
-            }
-            // Parsing google place api here for rating and services
-            var hotelRatingService = await GooglePlacesService.GetHotelDetailsAsync(hotelIdName);
-            var hotelOffers = await FetchHotelOffers.FetchHotelOffersAsync(_httpClient, hotelIdIata, request, hotelRatingService);
+
+            // Step 1: Store hotel ID & names in DB
+            await _hotelRepositoryDB.SaveHotelsAsync(hotelIdName);
+
+            // Step 2: Fetch hotel details from Google for hotels in DB - Move to Program.cs
+            //await _googlePlacesService.ProcessHotelsAsync();
+
+            // Step 3: Get hotel rating and services from DB
+            var hotelRatingServiceWithDB = await _hotelRepositoryDB.GetHotelDetailsAsync(hotelIdName.Keys.ToList());
+
+            // Step 4: Get entire hotel offer info 
+            var hotelOffers = await FetchHotelOffers.FetchHotelOffersAsync(_httpClient, hotelIdIata, request, hotelRatingServiceWithDB);
 
             return new HotelSearchResponse { Data = hotelOffers ?? new List<HotelOffer>() };
         }
