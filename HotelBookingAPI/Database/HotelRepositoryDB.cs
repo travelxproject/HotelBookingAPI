@@ -60,15 +60,15 @@ namespace HotelBookingAPI.Database
             }
         }
 
-        public async Task<List<string>> GetHotelsWithoutRatingsAsync()
+        public async Task<List<(string HotelId, string HotelName)>> GetHotelsWithoutRatingsAsync()
         {
             using var connection = new SqlConnection(_connectionString);
             connection.Open();
 
             string query = "SELECT HotelId, Name FROM HotelDetails WHERE Rating IS NULL OR Amenities IS NULL";
-            var hotels = await connection.QueryAsync(query);
+            var hotels = await connection.QueryAsync<(string, string)>(query);
 
-            return hotels.Select(h => (string)h.Name).ToList();
+            return hotels.ToList();
         }
 
         public async Task<Dictionary<string, (double Rating, List<string> Services)>> GetHotelDetailsAsync(List<string> hotelIds)

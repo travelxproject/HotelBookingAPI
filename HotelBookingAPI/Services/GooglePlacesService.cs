@@ -24,9 +24,9 @@ namespace HotelBookingAPI.APIs
             if (!hotels.Any()) return;
 
             // Step 1: Fetch all Place IDs in parallel
-            var placeIdResults = await Task.WhenAll(hotels.Select(async h => (h, await GetPlaceIdAsync(h.HotelName))));
+            var placeIdResults = await Task.WhenAll(hotels.Select(async h => (h.HotelId, await GetPlaceIdAsync(h.HotelName))));
             var hotelPlaceMap = placeIdResults.Where(x => x.Item2 != null)
-                                              .ToDictionary(x => x.h.HotelId, x => x.Item2!);
+                                              .ToDictionary(x => x.HotelId, x => x.Item2!);
 
             // Step 2: Fetch all hotel details in parallel
             var detailsResults = await Task.WhenAll(hotelPlaceMap.Select(async h => (h.Key, await FetchHotelDetailsFromGoogle(h.Value))));
