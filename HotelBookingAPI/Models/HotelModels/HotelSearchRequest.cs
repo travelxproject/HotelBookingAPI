@@ -1,4 +1,4 @@
-﻿namespace HotelBookingAPI.Models
+﻿namespace HotelBookingAPI.Models.HotelModels
 {
     public class HotelSearchRequest
     {

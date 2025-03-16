@@ -1,9 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using HotelBookingAPI.Models;
-using HotelBookingAPI.Services;
-using HotelBookingAPI.Services;
 using Swashbuckle.AspNetCore.Annotations;
 using Microsoft.AspNetCore.Authorization;
+using HotelBookingAPI.Services.HotelServices;
+using HotelBookingAPI.Models.HotelModels;
 
 
 namespace HotelBookingAPI.Controllers

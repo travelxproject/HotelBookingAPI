@@ -1,12 +1,11 @@
 ﻿using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using HotelBookingAPI.APIs;
 using HotelBookingAPI.Database;
-using HotelBookingAPI.Models;
+using HotelBookingAPI.Models.HotelModels;
 using HotelBookingAPI.Utilities;
 
-namespace HotelBookingAPI.Services
+namespace HotelBookingAPI.Services.HotelServices
 {
     public class AmadeusService
     {
@@ -97,7 +96,7 @@ namespace HotelBookingAPI.Services
                     if (hotel.TryGetProperty("hotelId", out var hotelId) && hotelId.ValueKind == JsonValueKind.String)
                     {
                         string hotelIdStr = hotelId.GetString();
-                        string cityCodeStr = "Unknown"; 
+                        string cityCodeStr = "Unknown";
 
                         if (hotel.TryGetProperty("iataCode", out var iataCode) && iataCode.ValueKind == JsonValueKind.String)
                         {
@@ -186,6 +185,6 @@ namespace HotelBookingAPI.Services
             public int ExpiresIn { get; set; }
         }
 
-        
+
     }
 }

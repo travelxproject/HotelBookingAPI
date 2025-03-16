@@ -1,15 +1,15 @@
-﻿using HotelBookingAPI.Models;
+﻿using HotelBookingAPI.Models.HotelModels;
 using HotelBookingAPI.Utilities;
 using System.Text.Json;
 using static Afonsoft.Amadeus.Resources.HotelOffer;
 
-namespace HotelBookingAPI.Services
+namespace HotelBookingAPI.Services.HotelServices
 {
     public class FetchHotelOffers
     {
         // Fetching the detailed hotel offer info, return as a list. Try maximum 3 times to parse hotel info with 1s sending request to API for rate limit. 
-        public static async Task<List<HotelOffer>?> FetchHotelOffersAsync(HttpClient _httpClient, Dictionary<string, string> hotelIdIata, 
-            HotelSearchRequest request, Dictionary<string, (double, List<string>)> hotelRating) 
+        public static async Task<List<HotelOffer>?> FetchHotelOffersAsync(HttpClient _httpClient, Dictionary<string, string> hotelIdIata,
+            HotelSearchRequest request, Dictionary<string, (double, List<string>)> hotelRating)
         {
             var allOffers = new List<HotelOffer>();
             int maxIdsPerRequest = 20;
@@ -68,7 +68,7 @@ namespace HotelBookingAPI.Services
                                     Console.WriteLine($"Failed to fetch offer for hotel ID {hotelId}. Status: {singleResponse.StatusCode}");
                                 }
                             }
-                            break; 
+                            break;
                         }
                     }
                 }
@@ -98,13 +98,13 @@ namespace HotelBookingAPI.Services
 
                 var HotelID = hotel.TryGetProperty("hotelId", out var hotelId) ? hotelId.GetString() : "Unknown";
 
-                double rating = 0.0;  
-                List<string> services = new List<string>();  
+                double rating = 0.0;
+                List<string> services = new List<string>();
 
                 if (hotelRatingService.TryGetValue(HotelID, out var ratingAndServices))
                 {
-                    rating = ratingAndServices.Item1;  
-                    services = ratingAndServices.Item2 ?? new List<string>(); 
+                    rating = ratingAndServices.Item1;
+                    services = ratingAndServices.Item2 ?? new List<string>();
                 }
 
                 var hotelOffer = new HotelOffer
@@ -114,7 +114,7 @@ namespace HotelBookingAPI.Services
                     Location = hotel.TryGetProperty("cityCode", out var cityCode) ? cityCode.GetString() : "Unknown",
                     Price = ParseHelper.ParseDecimalFromJson(hotelEntry, "offers[0].price.total"),
                     Currency = hotelEntry.TryGetProperty("offers", out var offers) && offers[0].TryGetProperty("price", out var price) &&
-                               price.TryGetProperty("currency", out var currency) ? currency.GetString(): "Unknown",
+                               price.TryGetProperty("currency", out var currency) ? currency.GetString() : "Unknown",
                     Rating = rating.ToString(),
                     IsAvailable = hotelEntry.TryGetProperty("available", out var available) ? available.GetBoolean().ToString() : "Unknown",
                     Services = services

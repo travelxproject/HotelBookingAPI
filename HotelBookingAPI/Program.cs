@@ -1,8 +1,8 @@
-﻿using HotelBookingAPI.Services;
-using Microsoft.OpenApi.Models;
+﻿using Microsoft.OpenApi.Models;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Text;
+using HotelBookingAPI.Services.HotelServices;
 
 var builder = WebApplication.CreateBuilder(args);
 

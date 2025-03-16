@@ -32,4 +32,9 @@
     <PackageReference Include="System.Net.Http.Json" Version="9.0.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Models\FlightModels\" />
+    <Folder Include="Services\FlightServices\" />
+  </ItemGroup>
+
 </Project>

@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace HotelBookingAPI.Models
+namespace HotelBookingAPI.Models.HotelModels
 {
     public class HotelSearchResponse
     {
