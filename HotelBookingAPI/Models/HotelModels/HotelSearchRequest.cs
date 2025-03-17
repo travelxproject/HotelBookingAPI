@@ -12,5 +12,5 @@
         public decimal? MaxPrice { get; set; }
         public string? Rating { get; set; }
         public string? Services { get; set; }
-    }
+    }   
 }
