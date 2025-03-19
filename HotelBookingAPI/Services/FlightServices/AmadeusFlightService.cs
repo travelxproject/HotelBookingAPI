@@ -5,6 +5,10 @@ using System.Text.Json;
 using HotelBookingAPI.Models.HotelModels;
 using HotelBookingAPI.Utilities;
 using HotelBookingAPI.Models.FlightModels;
+using System.Buffers.Text;
+using Afonsoft.Amadeus.shopping;
+using Afonsoft.Amadeus.Resources;
+using static Afonsoft.Amadeus.Resources.HotelOffer;
 
 namespace HotelBookingAPI.Services.FlightServices
 {
@@ -38,7 +42,45 @@ namespace HotelBookingAPI.Services.FlightServices
             string hotelSearchUrl = $"https://test.api.amadeus.com/v2/shopping/flight-offers" +
                                     $"?originLocationCode={request.OriginLocationCode}&destinationLocationCode={request.DestinationLocationCode}" +
                                     $"&departureDate={request.DepartureDate}&adults={request.Adults}";
+
+            string baseUrl = "https://test.api.amadeus.com/v2/shopping/flight-offers";
+
+            var requiredParams = new List<string>
+            {
+                $"originLocationCode={request.OriginLocationCode}",
+                $"destinationLocationCode={request.DestinationLocationCode}",
+                $"departureDate={request.DepartureDate}",
+                $"adults={request.Adults}"
+            };
+
+            // Optional for user to enter
+            if (!string.IsNullOrEmpty(request.ReturnDate)) requiredParams.Add($"returnDate={request.ReturnDate}");
+            if (!string.IsNullOrEmpty(request.TravelClass)) requiredParams.Add($"travelClass={request.TravelClass}");
+            if (request.NonStop.HasValue) requiredParams.Add($"nonStop={request.NonStop.Value.ToString().ToLower()}");
+            if (request.MaxPrice.HasValue) requiredParams.Add($"maxPrice={request.MaxPrice.Value}");
+            if (!string.IsNullOrEmpty(request.IncludedAirlineCodes)) requiredParams.Add($"includedAirlineCodes={request.IncludedAirlineCodes}");
+            if (!string.IsNullOrEmpty(request.ExcludedAirlineCodes)) requiredParams.Add($"excludedAirlineCodes={request.ExcludedAirlineCodes}");
+
+
+            string flightSearchUrl = $"{baseUrl}?{string.Join("&", requiredParams)}";
+
+            var response = await _httpClient.GetAsync(flightSearchUrl);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorResponse = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Failed to fetch hotels. Status: {response.StatusCode}, Response: {errorResponse}");
+                return null;
+            }
+
+            var content = await response.Content.ReadAsStringAsync();
+
+            var flightOffer = ExtractFlightInfo.ExtractFlightInfoDetail(content);
+
+            // Return a list of selected flight info
+            return new FlightSearchResponse { Data = flightOffer ?? new List<FlightOfferDetail>() };
         }
+
+        
 
 
         private async Task<string> GetAccessTokenAsync()

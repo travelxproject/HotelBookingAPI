@@ -4,10 +4,10 @@ namespace HotelBookingAPI.Models.FlightModels
 {
     public class FlightSearchResponse
     {
-        public List<FlightOffer> Data { get; set; }
+        public List<FlightOfferDetail> Data { get; set; }
     }
 
-    public class FlightOffer
+    public class FlightOfferDetail
     {
         public string DepartureIataCode { get; set; }
         public string DepartureTerminal { get; set; }
