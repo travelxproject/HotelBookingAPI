@@ -19,6 +19,7 @@ namespace HotelBookingAPI.Models.FlightModels
         public string Currency { get; set; }
         public string Duration { get; set; }
         public int NumberOfStops { get; set; }
+        public string ConnectionCity { get; set; }
         public string CheckedBags { get; set; }
         public string CabinBags { get; set; }
         public List<string>? Amenities { get; set; }
