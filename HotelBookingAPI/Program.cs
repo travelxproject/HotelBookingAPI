@@ -3,6 +3,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Text;
 using HotelBookingAPI.Services.HotelServices;
+using HotelBookingAPI.Services.FlightServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,9 +31,9 @@ builder.Services.AddSwaggerGen(options =>
 
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "Hotel Booking API",
+        Title = "Hotel & Flight Booking API",
         Version = "v1",
-        Description = "API for searching and booking hotels using Amadeus API.",
+        Description = "API for searching and booking hotels and flights using Amadeus API.",
     });
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
@@ -62,6 +63,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 builder.Services.AddHttpClient<AmadeusService>();
+builder.Services.AddHttpClient<AmadeusFlightService>();
 
 builder.WebHost.UseUrls("http://localhost:6011");
 
@@ -70,7 +72,7 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
-    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Hotel Booking API v1");
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Hotel & Flight Booking API v1");
     options.RoutePrefix = "swagger"; 
 });
 app.UseAuthentication(); 

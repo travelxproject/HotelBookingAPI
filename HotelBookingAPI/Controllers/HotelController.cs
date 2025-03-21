@@ -8,7 +8,7 @@ using HotelBookingAPI.Models.HotelModels;
 namespace HotelBookingAPI.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/hotels")]
     public class HotelController : ControllerBase
     {
         private readonly AmadeusService _amadeusService;

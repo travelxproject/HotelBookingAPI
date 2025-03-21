@@ -17,11 +17,16 @@ namespace HotelBookingAPI.Models.FlightModels
         public string ArrivalTime { get; set; }
         public decimal Price { get; set; }
         public string Currency { get; set; }
-        public string Duration { get; set; }
-        public int NumberOfStops { get; set; }
-        public string ConnectionCity { get; set; }
-        public string CheckedBags { get; set; }
-        public string CabinBags { get; set; }
-        public List<string>? Amenities { get; set; }
+        //public string Duration { get; set; }
+        //public int NumberOfStops { get; set; }
+        //public string ConnectionCity { get; set; }
+        //public string CheckedBags { get; set; }
+        //public string CabinBags { get; set; }
+        //public List<string>? Amenities { get; set; }
+        public Dictionary<string, object> ConnectionInfo { get; set; }
+        public FlightOfferDetail()
+        {
+            ConnectionInfo = new Dictionary<string, object>();
+        }
     }
 }

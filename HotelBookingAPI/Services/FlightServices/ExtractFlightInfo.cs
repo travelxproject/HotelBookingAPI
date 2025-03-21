@@ -1,13 +1,12 @@
 ﻿using HotelBookingAPI.Models.FlightModels;
-using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace HotelBookingAPI.Services.FlightServices
 {
     public class ExtractFlightInfo
     {
-        public static List<FlightOfferDetail> ExtractFlightInfoDetail(string jsonResponse) {
-
+        public static List<FlightOfferDetail> ExtractFlightInfoDetail(string jsonResponse)
+        {
             try
             {
                 using JsonDocument doc = JsonDocument.Parse(jsonResponse);
@@ -22,14 +21,15 @@ namespace HotelBookingAPI.Services.FlightServices
                     if (!flightOffer.TryGetProperty("price", out JsonElement priceElement)) continue;
                     if (!flightOffer.TryGetProperty("travelerPricings", out JsonElement travelerPricingsArray)) continue;
 
-                    // Extract price and currency
+                    // Extract total price and currency
                     decimal totalPrice = priceElement.GetProperty("total").GetDecimal();
                     string currency = priceElement.GetProperty("currency").GetString();
 
-                    // Get baggage information
+                    // Extract baggage information from the first traveler
                     string checkedBags = "N/A";
                     string cabinBags = "N/A";
                     var firstTravelerPricing = travelerPricingsArray.EnumerateArray().FirstOrDefault();
+
                     if (firstTravelerPricing.TryGetProperty("fareDetailsBySegment", out JsonElement fareDetails))
                     {
                         foreach (var segment in fareDetails.EnumerateArray())
@@ -61,7 +61,7 @@ namespace HotelBookingAPI.Services.FlightServices
                         var firstSegment = segments.First();
                         var lastSegment = segments.Last();
 
-                        // Ensure departure and arrival data comes from the first and last segment in the entire itinerary
+                        // Extract main flight information
                         string departureIataCode = firstSegment.GetProperty("departure").GetProperty("iataCode").GetString();
                         string departureTerminal = firstSegment.GetProperty("departure").TryGetProperty("terminal", out JsonElement depTerminal) ? depTerminal.GetString() : "N/A";
                         string departureTime = firstSegment.GetProperty("departure").GetProperty("at").GetString();
@@ -73,14 +73,29 @@ namespace HotelBookingAPI.Services.FlightServices
                         string duration = itinerary.GetProperty("duration").GetString();
                         int numberOfStops = segments.Count - 1;
 
-                        List<string> connectionCities = new List<string>();
-                        if (numberOfStops > 0)
+                        // Extract detailed connection information - TODO 
+                        List<string> connectionDetails = new List<string>();
+                        for (int i = 0; i < segments.Count - 1; i++)
                         {
-                            for (int i = 0; i < segments.Count - 1; i++)
-                            {
-                                string connectionCity = segments[i].GetProperty("arrival").GetProperty("iataCode").GetString();
-                                connectionCities.Add(connectionCity);
-                            }
+                            var segment = segments[i];
+                            var nextSegment = segments[i + 1];
+
+                            string connectionCity = segment.GetProperty("arrival").GetProperty("iataCode").GetString();
+                            string layoverDuration = CalculateLayoverDuration(segment.GetProperty("arrival").GetProperty("at").GetString(),
+                                                                              nextSegment.GetProperty("departure").GetProperty("at").GetString());
+
+                            connectionDetails.Add($"{connectionCity} ({layoverDuration})");
+                        }
+
+                        // Extract flight segments with carrier and flight number
+                        List<string> segmentDetails = new List<string>();
+                        foreach (var segment in segments)
+                        {
+                            string carrierCode = segment.GetProperty("carrierCode").GetString();
+                            string flightNumber = segment.GetProperty("number").GetString();
+                            string segmentDuration = segment.GetProperty("duration").GetString();
+
+                            segmentDetails.Add($"{carrierCode}{flightNumber} ({segmentDuration})");
                         }
 
                         flightOffers.Add(new FlightOfferDetail
@@ -95,10 +110,10 @@ namespace HotelBookingAPI.Services.FlightServices
                             Currency = currency,
                             Duration = duration,
                             NumberOfStops = numberOfStops,
-                            ConnectionCity = string.Join(",", connectionCities),
+                            ConnectionCity = connectionDetails.Count > 0 ? string.Join(" → ", connectionDetails) : "Non-stop",
                             CheckedBags = checkedBags,
                             CabinBags = cabinBags,
-                            Amenities = new List<string>() 
+                            Amenities = new List<string>()
                         });
                     }
                 }
@@ -112,5 +127,15 @@ namespace HotelBookingAPI.Services.FlightServices
             }
         }
 
+        private static string CalculateLayoverDuration(string arrivalTime, string departureTime)
+        {
+            if (DateTime.TryParse(arrivalTime, out DateTime arrival) &&
+                DateTime.TryParse(departureTime, out DateTime departure))
+            {
+                TimeSpan layover = departure - arrival;
+                return $"{(int)layover.TotalHours}h {layover.Minutes}m";
+            }
+            return "N/A";
+        }
     }
 }
