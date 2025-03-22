@@ -1,4 +1,7 @@
 ﻿using HotelBookingAPI.Models.FlightModels;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 
 namespace HotelBookingAPI.Services.FlightServices
@@ -21,38 +24,9 @@ namespace HotelBookingAPI.Services.FlightServices
                     if (!flightOffer.TryGetProperty("price", out JsonElement priceElement)) continue;
                     if (!flightOffer.TryGetProperty("travelerPricings", out JsonElement travelerPricingsArray)) continue;
 
-                    // Extract total price and currency
                     decimal totalPrice = priceElement.GetProperty("total").GetDecimal();
                     string currency = priceElement.GetProperty("currency").GetString();
 
-                    // Extract baggage information from the first traveler
-                    string checkedBags = "N/A";
-                    string cabinBags = "N/A";
-                    var firstTravelerPricing = travelerPricingsArray.EnumerateArray().FirstOrDefault();
-
-                    if (firstTravelerPricing.TryGetProperty("fareDetailsBySegment", out JsonElement fareDetails))
-                    {
-                        foreach (var segment in fareDetails.EnumerateArray())
-                        {
-                            if (segment.TryGetProperty("includedCheckedBags", out JsonElement checkedBagsElement) &&
-                                checkedBagsElement.TryGetProperty("weight", out JsonElement weightElement) &&
-                                checkedBagsElement.TryGetProperty("weightUnit", out JsonElement weightUnitElement))
-                            {
-                                checkedBags = $"{weightElement.GetInt32()} {weightUnitElement.GetString()}";
-                            }
-
-                            if (segment.TryGetProperty("includedCabinBags", out JsonElement cabinBagsElement) &&
-                                cabinBagsElement.TryGetProperty("weight", out JsonElement cabinWeightElement) &&
-                                cabinBagsElement.TryGetProperty("weightUnit", out JsonElement cabinWeightUnitElement))
-                            {
-                                cabinBags = $"{cabinWeightElement.GetInt32()} {cabinWeightUnitElement.GetString()}";
-                            }
-
-                            break;
-                        }
-                    }
-
-                    // Process each itinerary
                     foreach (JsonElement itinerary in itinerariesArray.EnumerateArray())
                     {
                         if (!itinerary.TryGetProperty("segments", out JsonElement segmentsArray)) continue;
@@ -61,7 +35,6 @@ namespace HotelBookingAPI.Services.FlightServices
                         var firstSegment = segments.First();
                         var lastSegment = segments.Last();
 
-                        // Extract main flight information
                         string departureIataCode = firstSegment.GetProperty("departure").GetProperty("iataCode").GetString();
                         string departureTerminal = firstSegment.GetProperty("departure").TryGetProperty("terminal", out JsonElement depTerminal) ? depTerminal.GetString() : "N/A";
                         string departureTime = firstSegment.GetProperty("departure").GetProperty("at").GetString();
@@ -73,8 +46,13 @@ namespace HotelBookingAPI.Services.FlightServices
                         string duration = itinerary.GetProperty("duration").GetString();
                         int numberOfStops = segments.Count - 1;
 
-                        // Extract detailed connection information - TODO 
-                        List<string> connectionDetails = new List<string>();
+                        // Connection flight Info
+                        Dictionary<string, object> connectionInfo = new Dictionary<string, object>();
+                        List<string> connectionCities = new List<string>();
+                        List<string> connectionDurations = new List<string>();
+                        List<string> checkedBagsList = new List<string>();
+                        List<string> cabinBagsList = new List<string>();
+
                         for (int i = 0; i < segments.Count - 1; i++)
                         {
                             var segment = segments[i];
@@ -84,19 +62,45 @@ namespace HotelBookingAPI.Services.FlightServices
                             string layoverDuration = CalculateLayoverDuration(segment.GetProperty("arrival").GetProperty("at").GetString(),
                                                                               nextSegment.GetProperty("departure").GetProperty("at").GetString());
 
-                            connectionDetails.Add($"{connectionCity} ({layoverDuration})");
+                            connectionCities.Add(connectionCity);
+                            connectionDurations.Add(layoverDuration);
                         }
 
-                        // Extract flight segments with carrier and flight number
-                        List<string> segmentDetails = new List<string>();
-                        foreach (var segment in segments)
+                        var firstTravelerPricing = travelerPricingsArray.EnumerateArray().FirstOrDefault();
+                        if (firstTravelerPricing.TryGetProperty("fareDetailsBySegment", out JsonElement fareDetails))
                         {
-                            string carrierCode = segment.GetProperty("carrierCode").GetString();
-                            string flightNumber = segment.GetProperty("number").GetString();
-                            string segmentDuration = segment.GetProperty("duration").GetString();
+                            foreach (var segment in fareDetails.EnumerateArray())
+                            {
+                                if (segment.TryGetProperty("includedCheckedBags", out JsonElement checkedBagsElement) &&
+                                    checkedBagsElement.TryGetProperty("weight", out JsonElement weightElement) &&
+                                    checkedBagsElement.TryGetProperty("weightUnit", out JsonElement weightUnitElement))
+                                {
+                                    checkedBagsList.Add($"{weightElement.GetInt32()}{weightUnitElement.GetString()}");
+                                }
+                                else
+                                {
+                                    checkedBagsList.Add("N/A");
+                                }
 
-                            segmentDetails.Add($"{carrierCode}{flightNumber} ({segmentDuration})");
+                                if (segment.TryGetProperty("includedCabinBags", out JsonElement cabinBagsElement) &&
+                                    cabinBagsElement.TryGetProperty("weight", out JsonElement cabinWeightElement) &&
+                                    cabinBagsElement.TryGetProperty("weightUnit", out JsonElement cabinWeightUnitElement))
+                                {
+                                    cabinBagsList.Add($"{cabinWeightElement.GetInt32()}{cabinWeightUnitElement.GetString()}");
+                                }
+                                else
+                                {
+                                    cabinBagsList.Add("N/A");
+                                }
+                            }
                         }
+
+                        connectionInfo["NumberOfStops"] = numberOfStops;
+                        connectionInfo["ConnectionCity"] = numberOfStops > 0 ? string.Join(" → ", connectionCities) : "Non-stop";
+                        connectionInfo["CheckedBags"] = string.Join("; ", checkedBagsList);
+                        connectionInfo["CabinBags"] = string.Join("; ", cabinBagsList);
+                        connectionInfo["Amenities"] = "N/A"; // Placeholder as amenities aren't present in the response.
+                        connectionInfo["ConnectionDuration"] = string.Join("; ", connectionDurations);
 
                         flightOffers.Add(new FlightOfferDetail
                         {
@@ -109,11 +113,7 @@ namespace HotelBookingAPI.Services.FlightServices
                             Price = totalPrice,
                             Currency = currency,
                             Duration = duration,
-                            NumberOfStops = numberOfStops,
-                            ConnectionCity = connectionDetails.Count > 0 ? string.Join(" → ", connectionDetails) : "Non-stop",
-                            CheckedBags = checkedBags,
-                            CabinBags = cabinBags,
-                            Amenities = new List<string>()
+                            ConnectionInfo = connectionInfo
                         });
                     }
                 }

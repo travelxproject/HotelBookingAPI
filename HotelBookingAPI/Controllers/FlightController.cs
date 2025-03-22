@@ -50,6 +50,21 @@ namespace HotelBookingAPI.Controllers
             [FromQuery] string? includedAirlineCodes,
             [FromQuery] string? excludedAirlineCodes)
         {
+            if (string.IsNullOrWhiteSpace(originLocationCode) || string.IsNullOrWhiteSpace(destinationLocationCode) || string.IsNullOrWhiteSpace(departureDate))
+            {
+                return BadRequest("Origin, destination, and departure date are required.");
+            }
+
+            if (!DateTime.TryParse(departureDate, out _))
+            {
+                return BadRequest("Invalid departure date format. Expected format: yyyy-MM-dd.");
+            }
+
+            if (!string.IsNullOrEmpty(returnDate) && !DateTime.TryParse(returnDate, out _))
+            {
+                return BadRequest("Invalid return date format. Expected format: yyyy-MM-dd.");
+            }
+
             var request = new FlightSearchRequest
             {
                 OriginLocationCode = originLocationCode,

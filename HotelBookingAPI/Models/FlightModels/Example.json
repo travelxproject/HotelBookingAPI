@@ -1,0 +1,19 @@
+{
+  "DepartureIataCode": "SYD",
+  "DepartureTerminal": "1",
+  "DepartureTime": "2025-05-02T12:35:00",
+  "ArrivalIataCode": "BKK",
+  "ArrivalTerminal": "N/A",
+  "ArrivalTime": "2025-05-03T08:05:00",
+  "Price": 306.52,
+  "Currency": "EUR",
+  "Duration": "PT22H30M",
+  "ConnectionInfo": {
+    "NumberOfStops": 1,
+    "ConnectionCity": "SIN",
+    "CheckedBags": "30KG; 30KG",
+    "CabinBags": "N/A; N/A",
+    "Amenities": "N/A",
+    "ConnectionDuration": "11h 35m"
+  }
+}
